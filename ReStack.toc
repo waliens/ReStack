@@ -1,0 +1,10 @@
+## Interface: 11305
+## Title: ReStack
+## Author: Manarius
+## Version: 0.1
+## Notes: An addon for restacking items.
+## DefaultState: Enabled
+## LoadOnDemand: 0
+## SavedVariables: ReStackSettings
+ReStack.lua
+ReStack.xml
