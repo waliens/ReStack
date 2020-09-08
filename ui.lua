@@ -1,9 +1,8 @@
 -- Namespace
 local _, ns = ...;
 
-ns.RestackUI = {};
-
-local RestackUI = ns.RestackUI;
+local Restack = ns.Restack;
+local Util = ns.Util;
 
 -------------
 -- Restack --
@@ -32,12 +31,12 @@ local function createFontString(frame, name, layer, point_ref, point_offset)
   return font_string;
 end
 
-
 local function updateText(rs_frame, count, maxtime, mintime)
   rs_frame.countString:SetText("Glands: " .. count);
   rs_frame.maxTimeString:SetText("Max time: " .. maxtime);
   rs_frame.minTimeString:SetText("Min time: " .. mintime);
 end
+
 
 local function createMenu() 
   local frame = CreateFrame("Frame", "ReStack_MainFrame", UIParent, "BasicFrameTemplateWithInset");
@@ -56,7 +55,29 @@ local function createMenu()
 
   -- buttons
   frame.countButton = createButton(frame, "ReStack_CountButton", "Count", {90, 20}, {"RIGHT", frame, "BOTTOM"}, {-5, 25});
+  frame.countButton:SetScript("OnClick", function(self, event)
+    local _, _, _, item_count = Restack.analyze_slots();
+    updateText(frame, item_count, 0, 0);
+  end);
+
   frame.restackButton = createButton(frame, "ReStack_RestackButton", "Restack", {90, 20}, {"LEFT", frame.countButton, "RIGHT"}, {10, 0});
+  frame.restackButton:SetScript("OnClick", function(self, event)
+    -- create coroutine
+    local co = coroutine.create(function() Restack.do_restack(); end);
+    -- resume coroutine when item unlocked is fired
+    local f = CreateFrame("Frame");
+    f:RegisterEvent("ITEM_UNLOCKED");
+    f:SetScript("OnEvent", function(self, event, ...)
+      if coroutine.status(co) == "dead" then
+        f:UnregisterEvent("ITEM_UNLOCKED");
+      end
+      if event == "ITEM_UNLOCKED" then
+        coroutine.resume(co);
+      end
+    end);
+    -- launch
+    coroutine.resume(co);
+  end);
 
   -- make the menu movable 
   frame:SetMovable(true);
@@ -64,7 +85,7 @@ local function createMenu()
   frame:RegisterForDrag("LeftButton");
   frame:SetScript("OnDragStart", frame.StartMoving);
   frame:SetScript("OnDragStop", frame.StopMovingOrSizing);
-  
+
   return frame;
 end
 
@@ -77,6 +98,7 @@ local function toggleMenu(menu)
   return menu;
 end
 
-RestackUI.toggleMenu = toggleMenu;
-RestackUI.createButton = createButton;
-RestackUI.createMenu = createMenu;
+ns.RestackUI = {};
+ns.RestackUI.toggleMenu = toggleMenu;
+ns.RestackUI.createButton = createButton;
+ns.RestackUI.createMenu = createMenu;

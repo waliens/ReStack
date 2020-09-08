@@ -1,11 +1,6 @@
 -- Namespace
 local _, ns = ...;
 
-ns.Util = {};
-
-local Util = ns.Util;
-
-
 ----------
 -- Util --
 ----------
@@ -47,6 +42,15 @@ local function pprint (t)
   print(format_table(t, 0));
 end
 
+local function table_find(tab, el)
+  for index, value in pairs(tab) do
+    if value == el then
+      return index;
+    end
+  end
+  return 0;
+end
+
 local function has_value (tab, val)
   for index, value in pairs(tab) do
     if value == val then
@@ -63,18 +67,79 @@ local function add_list_value (d, k, v)
   table.insert(d[k], v);
 end
 
-local function count_list_values(d)
+local function remove_list_value (d, k, v)
+  if d[k] == nil then return; end
+  local index = table_find(d[k], v);
+  if index == 0 then return; end
+  table.remove(d[k], index);
+  -- remove if list with key is empty
+  if table.getn(d[k]) == 0 then
+    d[k] = nil;
+  end
+end
+
+local function merge_list_value (d1, d2) 
+  local merged = {};
+  for k, list in pairs(d1) do
+    for _, v in ipairs(list) do
+      add_list_value(merged, k, v);
+    end
+  end
+  for k, list in pairs(d2) do
+    for _, v in ipairs(list) do
+      if merged[k] == nil or table_find(merged[k], v) == -1 then
+        add_list_value(merged, k, v);
+      end
+    end 
+  end
+  return merged;
+end
+
+local function count_list_value(d)
   local count = 0;
-  for index, value in ipairs(tab) do
-    count = count + #value;
+  for index, value in pairs(d) do
+    count = count + table.getn(value);
   end
   return count;
 end
 
-Util.map = map;
-Util.table_has_only_int_keys = table_has_only_int_keys;
-Util.format_table = format_table;
-Util.pprint = pprint;
-Util.has_value = has_value;
-Util.add_list_value = add_list_value;
-Util.count_list_values = count_list_values;
+local function table_keys(t)
+  local keyset = {};
+  for k, v in pairs(t) do
+    if v ~= nil then
+      table.insert(keyset, k);
+    end
+  end
+  return keyset;
+end
+
+local function mk_cache_key(key) 
+  if type(key) == "table" then
+    return table.concat(map(key, tostring), "_");
+  else 
+    return tostring(key);
+  end
+end
+
+local function cache_get(t, k)
+  return t[mk_cache_key(k)];
+end
+
+local function cache_set(t, k, v)
+  t[mk_cache_key(k)] = v;
+end
+
+ns.Util = {};
+ns.Util.map = map;
+ns.Util.table_has_only_int_keys = table_has_only_int_keys;
+ns.Util.format_table = format_table;
+ns.Util.pprint = pprint;
+ns.Util.table_find = table_find;
+ns.Util.has_value = has_value;
+ns.Util.add_list_value = add_list_value;
+ns.Util.remove_list_value = remove_list_value;
+ns.Util.count_list_value = count_list_value;
+ns.Util.merge_list_value = merge_list_value;
+ns.Util.table_keys = table_keys;
+ns.Util.cache_get = cache_get;
+ns.Util.cache_set = cache_set;
