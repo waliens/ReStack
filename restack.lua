@@ -30,9 +30,12 @@ local function cache_increment(t, k, v)
 end
 
 local function analyze_slots ()
-  local empty_slots = {};       -- maps bag_id with list of empty slots
-  local gland_slots = {};       -- maps bag_id with list of slots containing glands
-  local cnt_cache = {}; -- maps (bag_id, slot_id) with number of glands
+  -- read player's containers to track glands and empty slots
+  -- build a count cache (cnt_cache) to keep track of gland stack sizes
+  -- not relying on on the unreliable GetContainerItemInfo
+  local empty_slots = {};
+  local gland_slots = {};
+  local cnt_cache = {};
   local number_gland = 0;
   for bag_id=0,4 do
     for slot_id=1,GetContainerNumSlots(bag_id) do 
@@ -52,6 +55,7 @@ local function analyze_slots ()
 end
 
 local function move_item(cnt_cache, src_bag, src_slot, quantity, dst_bag, dst_slot)
+  -- Move an stack or part of a stack from a container slot to another
   ClearCursor();
   -- check not locked
   repeat
@@ -64,7 +68,7 @@ local function move_item(cnt_cache, src_bag, src_slot, quantity, dst_bag, dst_sl
   until not (locked1 or locked2)
 
   -- actual move
-  if Util.cache_get(cnt_cache, {src_bag, src_slot}) == quantity then
+  if quantity == -1 or Util.cache_get(cnt_cache, {src_bag, src_slot}) == quantity then
     PickupContainerItem(src_bag, src_slot)
   else
     SplitContainerItem(src_bag, src_slot, quantity);
@@ -72,7 +76,8 @@ local function move_item(cnt_cache, src_bag, src_slot, quantity, dst_bag, dst_sl
   PickupContainerItem(dst_bag, dst_slot); 
 end
 
-local function extract_bag_slot_first(bag_slots)
+local function extract_bag_slot(bag_slots)
+  -- extract a bag slot from the bag_slots structure, takes the first available
   local keys = Util.table_keys(bag_slots);
   if table.getn(keys) == 0 then
     return nil, nil, nil;
@@ -84,6 +89,9 @@ local function extract_bag_slot_first(bag_slots)
 end
 
 local function extract_bag_slot_opt(cnt_cache, bag_slots, min) 
+  -- extract a bag slot from the bag_slots structure
+  -- if min is true, the slot with the smallest stack size is returned
+  -- if min is false, the slot with the largest stack size is returned
   local opt_count, opt_slot, opt_bag = (min and 9999 or -1), 0, 0; 
   for bag_tag, slots in pairs(bag_slots) do
     local bag = to_bag_id(bag_tag);
@@ -99,101 +107,173 @@ local function extract_bag_slot_opt(cnt_cache, bag_slots, min)
   return opt_bag, opt_slot, opt_count;
 end
 
-local function split_stack(empty_slots, cnt_cache, src_bag_id, src_slot_id, max_splits)
-  -- Split stack - split a source item stack ($src_bag_id, $src_slot_id) into as many piles of size 1
+local function split_stack(cnt_cache, empty, src_bag, src_slot, max_splits)
+  -- Split stack - split a source item stack ($src_bag, $src_slot) into as many piles of size 1
   -- as possible. Splitted stacks are placed in slots listed in empty slots.
   --
-  -- empty_slots: list of empty slots
+  -- empty: list of empty slots
   -- cnt_cache: cache mapping (bag_id, slot_id) => item_count
   -- src_bag_id: (int) source_bag_id
-  -- src_slot_id: (int) src_slot_id
+  -- src_slot: (int) src_slot
   -- max_splits: (int) maximum number of splits out of the source stack
-  local stack_size = Util.cache_get(cnt_cache, {src_bag_id, src_slot_id});
+  local stack_size = Util.cache_get(cnt_cache, {src_bag, src_slot});
   local nb_splits = math.min(max_splits, stack_size - 1);
-  local maxxed_slots = {};
-  Util.add_list_value(maxxed_slots, to_bag_tag(src_bag_id), src_slot_id);
+  local maxed = {};
+  Util.add_list_value(maxed, to_bag_tag(src_bag), src_slot);
 
   local cnt = 0;
-  while cnt < nb_splits and table.getn(Util.table_keys(empty_slots)) > 0 do
-    local dst_bag_tag, dst_bag_id, dst_slot_id = extract_bag_slot_first(empty_slots); 
-    move_item(cnt_cache, src_bag_id, src_slot_id, 1, dst_bag_id, dst_slot_id);
+  while cnt < nb_splits and table.getn(Util.table_keys(empty)) > 0 do
+    local dst_bag_tag, dst_bag, dst_slot = extract_bag_slot(empty); 
+    move_item(cnt_cache, src_bag, src_slot, 1, dst_bag, dst_slot);
     -- update item count cache
-    cache_increment(cnt_cache, {src_bag_id, src_slot_id}, -1);
-    cache_increment(cnt_cache, {dst_bag_id, dst_slot_id}, 1);
+    cache_increment(cnt_cache, {src_bag, src_slot}, -1);
+    cache_increment(cnt_cache, {dst_bag, dst_slot}, 1);
     -- update slots structures
-    Util.remove_list_value(empty_slots, dst_bag_tag, dst_slot_id);
-    Util.add_list_value(maxxed_slots, dst_bag_tag, dst_slot_id);
+    Util.remove_list_value(empty, dst_bag_tag, dst_slot);
+    Util.add_list_value(maxed, dst_bag_tag, dst_slot);
     cnt = cnt + 1;
   end
 
-  return empty_slots, maxxed_slots;
+  return maxed;
 end
 
-local function get_item_size(cache, bag_id, slot_id)
-  local val = Util.tuple_table_get(cache, bag_id, slot_id);
-  if val ~= nil then
-    return val;
+local function select_and_merge_stacks(cnt_cache, empty, src_slots, dst_slots, merge_to_largest)
+  -- merge_to_largest : true if smaller stacks should be merged into larger stacks
+  local src_bag, src_slot, src_stack_size = extract_bag_slot_opt(cnt_cache, src_slots, merge_to_largest);
+  Util.remove_list_value(src_slots, to_bag_tag(src_bag), src_slot); -- in case src_slots == dst_slots and stacks have the same size
+  local dst_bag, dst_slot, dst_stack_size = extract_bag_slot_opt(cnt_cache, dst_slots, not merge_to_largest);
+  local amount = math.min(MAX_GLAND_STACK_SIZE - dst_stack_size, src_stack_size);
+  move_item(cnt_cache, src_bag, src_slot, amount, dst_bag, dst_slot);
+
+  -- update count cache
+  cache_increment(cnt_cache, {src_bag, src_slot}, -amount);
+  cache_increment(cnt_cache, {dst_bag, dst_slot}, amount);
+  
+  -- if source stack is not empty, add it back to the list of source slots
+  if src_stack_size ~= amount then
+    Util.add_list_value(src_slots, to_bag_tag(src_bag), src_slot);
   else
-    local _, count, _, _, _, _, _ = GetContainerItemInfo(bag_id, slot_id);
-    val = count;
-    Util.tuple_table_set(cache, bag_id, slot_id, val);
+    Util.add_list_value(empty, to_bag_tag(src_bag), src_slot);
   end
-  return val;
-end
+  -- return dst slot info (bag, slot, size)
+  return dst_bag, dst_slot, dst_stack_size + amount;
+end 
 
-local function move_stacks(maxxed_slots, gland_slots, cnt_cache)
-  -- maxxed_slots: slot filled with max time glands
-  -- gland_slots: slot of glands to uptime
-  local full_slots = {};
-  while table.getn(Util.table_keys(maxxed_slots)) > 0 and table.getn(Util.table_keys(gland_slots)) > 0 do 
-    local gland_bag_id, gland_slot_id, _ = extract_bag_slot_opt(cnt_cache, gland_slots, false);
-    local maxxed_bag_id, maxxed_slot_id, _ = extract_bag_slot_opt(cnt_cache, maxxed_slots, true);
-
-    -- how many item can we tansfer
-    local gland_stack_size = Util.cache_get(cnt_cache, {gland_bag_id, gland_slot_id});
-    local maxxed_stack_size = Util.cache_get(cnt_cache, {maxxed_bag_id, maxxed_slot_id});
-
-    local amount = math.min(MAX_GLAND_STACK_SIZE - maxxed_stack_size, gland_stack_size);
-    move_item(cnt_cache, gland_bag_id, gland_slot_id, amount, maxxed_bag_id, maxxed_slot_id);
-
-    cache_increment(cnt_cache, {gland_bag_id, gland_slot_id}, -amount);
-    cache_increment(cnt_cache, {maxxed_bag_id, maxxed_slot_id}, amount);
-
-    -- if gland stack was completely merged into another one
-    if gland_stack_size == amount then
-      Util.remove_list_value(gland_slots, to_bag_tag(gland_bag_id), gland_slot_id);
-    end
-    -- if stack is full, move it to full list 
-    if maxxed_stack_size + amount == MAX_GLAND_STACK_SIZE then
-      Util.remove_list_value(maxxed_slots, to_bag_tag(maxxed_bag_id), maxxed_slot_id);
-      Util.add_list_value(full_slots, to_bag_tag(maxxed_bag_id), maxxed_slot_id);
+local function refresh_stacks(cnt_cache, empty, glands, maxed)
+  -- Move stacks so that timers are maxed out
+  -- Stops whenever everything is maxed out or when all maxed slots are full
+  -- maxed: slot filled with max time glands
+  -- glands: slot of glands to uptime
+  local full = {};
+  while table.getn(Util.table_keys(maxed)) > 0 and table.getn(Util.table_keys(glands)) > 0 do 
+    local bag, slot, stack_size = select_and_merge_stacks(cnt_cache, empty, glands, maxed, false);
+    if stack_size == MAX_GLAND_STACK_SIZE then
+      Util.remove_list_value(maxed, to_bag_tag(bag), slot);
+      Util.add_list_value(full, to_bag_tag(bag), slot);
     end
   end 
-  return full_slots;
+  return full;
 end
 
-local function do_restack()
-  -- identify empty slots and slots with glands and select seed stack
-  local glands, empty, cnt_cache, _ = analyze_slots();
-  local seed_bag_id, seed_slot_id, _ = extract_bag_slot_opt(cnt_cache, glands, true);
-  local maxxed = {}; -- glands that have max timer
-  Util.remove_list_value(glands, to_bag_tag(seed_bag_id), seed_slot_id);
-  Util.add_list_value(maxxed, to_bag_tag(seed_bag_id), seed_slot_id);
-  -- split reference stack
-  local full = nil; 
-  while table.getn(Util.table_keys(glands)) > 0 do
-    seed_bag_id, seed_slot_id, _ = extract_bag_slot_opt(cnt_cache, maxxed, false);
-    local remaining_stacks = Util.count_list_value(glands);
-    local maxxed_splitted;
-    empty, maxxed_splitted = split_stack(empty, cnt_cache, seed_bag_id, seed_slot_id, remaining_stacks + 1);
-    maxxed = Util.merge_list_value(maxxed_splitted, maxxed);
-    full = move_stacks(maxxed, glands, cnt_cache);
-    maxxed = Util.merge_list_value(full, maxxed);
+local function check_full_slots(cnt_cache, bag_slots)
+  -- checks which slots in bag_slots contain a full stack
+  -- full stacks are removed from bag_slots
+  local full = {};
+  for bag_tag, slots in pairs(bag_slots) do
+    local bag = to_bag_id(bag_tag);
+    for _, slot in ipairs(slots) do
+      if Util.cache_get(cnt_cache, {bag, tag}) == MAX_GLAND_STACK_SIZE then
+        Util.remove_list_value(bag_slots, bag_tag, slot);
+        Util.add_list_value(full, bag_tag, slot);
+      end
+    end
   end
-  -- merge all
+  return full;
+end
+
+local function clean_up(cnt_cache, empty, glands)
+  -- remerge all stacks so that it fills a minimum number of bag slots
+  -- first checks which ones are already full 
+  if table.getn(Util.table_keys(glands)) == 0 then
+    return;
+  end
+
+  -- filter full slots
+  local full = check_full_slots(cnt_cache, glands);
+
+  -- until there is only one stack not full, merge stacks
+  while Util.count_list_value(glands) > 1 do
+    local dst_bag, dst_slot, dst_stack_size = select_and_merge_stacks(cnt_cache, empty, glands, glands, true);
+    if dst_stack_size == MAX_GLAND_STACK_SIZE then
+      Util.remove_list_value(glands, to_bag_tag(dst_bag), dst_slot);
+      Util.add_list_value(full, to_bag_tag(dst_bag), dst_slot);
+    end
+  end
+
+  -- move last gland stack into full structure
+  local to_move = full;
+  local b, _, s = extract_bag_slot(glands);
+  Util.add_list_value(to_move, b, s);
+
+  -- count number of stacks in bag
+  local number_stacks = Util.count_list_value(to_move);
+  local valid_empty = {};
+
+  -- move to first bag slots
+  local bag, slot = 0, 0;
+  while number_stacks > 0 and bag < 4 do
+    local bag_tag = to_bag_tag(bag);
+    slot = 1;
+    while number_stacks > 0 and slot <= GetContainerNumSlots(bag) do
+      local is_empty = Util.has_list_value(empty, bag_tag, slot);
+      local has_glands = Util.has_list_value(to_move, bag_tag, slot);
+      if is_empty then
+        Util.add_list_value(valid_empty, bag_tag, slot);
+        number_stacks = number_stacks - 1;
+      elseif has_glands then
+        Util.remove_list_value(to_move, bag_tag, slot);
+        number_stacks = number_stacks - 1;
+      end
+      slot = slot + 1;
+    end
+    bag = bag + 1;
+  end
+
+  while Util.count_list_value(valid_empty) > 0 and  Util.count_list_value(to_move) > 0 do
+    local empty_bag_tag, empty_bag, empty_slot = extract_bag_slot(valid_empty);
+    local gland_bag_tag, gland_bag, gland_slot = extract_bag_slot(to_move);
+    move_item(cnt_cache, gland_bag, gland_slot, -1, empty_bag, empty_slot)
+    Util.remove_list_value(valid_empty, empty_bag_tag, empty_slot);
+    Util.remove_list_value(to_move, gland_bag_tag, gland_slot);
+  end
+end 
+
+local function do_restack()
+  -- execute the restacking 
+  local glands, empty, cnt_cache, _ = analyze_slots();
+  local seed_bag, seed_slot, _ = extract_bag_slot_opt(cnt_cache, glands, true);
+  local maxed = {}; -- gland slots that have max timer
+  Util.remove_list_value(glands, to_bag_tag(seed_bag), seed_slot);
+  Util.add_list_value(maxed, to_bag_tag(seed_bag), seed_slot);
+
+  while table.getn(Util.table_keys(glands)) > 0 do
+    seed_bag, seed_slot, _ = extract_bag_slot_opt(cnt_cache, maxed, false);
+    local remaining = Util.count_list_value(glands);
+    local splitted = split_stack(cnt_cache, empty, seed_bag, seed_slot, remaining + 1);
+    maxed = Util.merge_list_value(splitted, maxed);
+    local full = refresh_stacks(cnt_cache, empty, glands, maxed);
+    maxed = Util.merge_list_value(full, maxed);
+  end
+
+  print("ReStack has restacked your stack(s).")
+end
+
+local function do_cleanup()
+  local glands, empty, cnt_cache, _ = analyze_slots();
+  clean_up(cnt_cache, empty, glands);
 end
 
 ns.Restack = {};
-ns.Restack.bag_tag = bag_tag;
 ns.Restack.analyze_slots = analyze_slots;
 ns.Restack.do_restack = do_restack;
+ns.Restack.do_cleanup = do_cleanup;
