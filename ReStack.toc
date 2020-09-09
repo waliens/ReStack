@@ -9,5 +9,6 @@
 
 ## Add-on files
 util.lua
+restack.lua
 ui.lua
 init.lua
