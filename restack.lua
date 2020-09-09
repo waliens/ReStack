@@ -6,8 +6,8 @@ local Util = ns.Util;
 local Restacker = {};
 
 -- Constants
-GLAND_ID = 12586; -- = 4338;   
-MAX_GLAND_STACK_SIZE = 50; -- 50; 
+GLAND_ID = 4338; -- 12586; -- 
+MAX_GLAND_STACK_SIZE = 20; -- 50; -- 
 
 --------------------------------------
 -- SLOTS                            --
@@ -51,29 +51,25 @@ local function analyze_slots ()
   return gland_slots, empty_slots, cnt_cache, number_gland;
 end
 
-local function select_reference_stack(items) 
-  -- select the stack to use for restacking 
-  -- currently, selects the smallest stack
-  local min_bag_id, min_slot, min_count = 0, 0, 9999;
-  for bag_tag, slots in pairs(items) do
-    local bag_id = to_bag_id(bag_tag);
-    for _, slot in ipairs(slots) do
-      local _, item_count, _, _, _, _, _ = GetContainerItemInfo(bag_id, slot);
-      if item_count < min_count then
-        min_count = item_count;
-        min_bag_id = bag_id;
-        min_slot = slot;
-      end 
-    end 
-  end
-  return min_bag_id, min_slot, min_count;
-end
-
-local function split_item(src_bag, src_slot, quantity, dst_bag, dst_slot)
+local function move_item(cnt_cache, src_bag, src_slot, quantity, dst_bag, dst_slot)
   ClearCursor();
-  SplitContainerItem(src_bag, src_slot, quantity);
+  -- check not locked
+  repeat
+    local _, _, locked1 = GetContainerItemInfo(src_bag, src_slot);
+    local _, _, locked2 = GetContainerItemInfo(dst_bag, dst_slot);
+
+    if locked1 or locked2 then
+        coroutine.yield();
+    end
+  until not (locked1 or locked2)
+
+  -- actual move
+  if Util.cache_get(cnt_cache, {src_bag, src_slot}) == quantity then
+    PickupContainerItem(src_bag, src_slot)
+  else
+    SplitContainerItem(src_bag, src_slot, quantity);
+  end
   PickupContainerItem(dst_bag, dst_slot); 
-  coroutine.yield();
 end
 
 local function extract_bag_slot_first(bag_slots)
@@ -120,7 +116,7 @@ local function split_stack(empty_slots, cnt_cache, src_bag_id, src_slot_id, max_
   local cnt = 0;
   while cnt < nb_splits and table.getn(Util.table_keys(empty_slots)) > 0 do
     local dst_bag_tag, dst_bag_id, dst_slot_id = extract_bag_slot_first(empty_slots); 
-    split_item(src_bag_id, src_slot_id, 1, dst_bag_id, dst_slot_id);
+    move_item(cnt_cache, src_bag_id, src_slot_id, 1, dst_bag_id, dst_slot_id);
     -- update item count cache
     cache_increment(cnt_cache, {src_bag_id, src_slot_id}, -1);
     cache_increment(cnt_cache, {dst_bag_id, dst_slot_id}, 1);
@@ -158,7 +154,7 @@ local function move_stacks(maxxed_slots, gland_slots, cnt_cache)
     local maxxed_stack_size = Util.cache_get(cnt_cache, {maxxed_bag_id, maxxed_slot_id});
 
     local amount = math.min(MAX_GLAND_STACK_SIZE - maxxed_stack_size, gland_stack_size);
-    split_item(gland_bag_id, gland_slot_id, amount, maxxed_bag_id, maxxed_slot_id);
+    move_item(cnt_cache, gland_bag_id, gland_slot_id, amount, maxxed_bag_id, maxxed_slot_id);
 
     cache_increment(cnt_cache, {gland_bag_id, gland_slot_id}, -amount);
     cache_increment(cnt_cache, {maxxed_bag_id, maxxed_slot_id}, amount);
@@ -179,14 +175,14 @@ end
 local function do_restack()
   -- identify empty slots and slots with glands and select seed stack
   local glands, empty, cnt_cache, _ = analyze_slots();
-  local seed_bag_id, seed_slot_id, _ = select_reference_stack(glands);
+  local seed_bag_id, seed_slot_id, _ = extract_bag_slot_opt(cnt_cache, glands, true);
   local maxxed = {}; -- glands that have max timer
   Util.remove_list_value(glands, to_bag_tag(seed_bag_id), seed_slot_id);
   Util.add_list_value(maxxed, to_bag_tag(seed_bag_id), seed_slot_id);
   -- split reference stack
   local full = nil; 
   while table.getn(Util.table_keys(glands)) > 0 do
-    _, seed_bag_id, seed_slot_id = extract_bag_slot_first(maxxed);
+    seed_bag_id, seed_slot_id, _ = extract_bag_slot_opt(cnt_cache, maxxed, false);
     local remaining_stacks = Util.count_list_value(glands);
     local maxxed_splitted;
     empty, maxxed_splitted = split_stack(empty, cnt_cache, seed_bag_id, seed_slot_id, remaining_stacks + 1);

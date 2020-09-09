@@ -65,16 +65,20 @@ local function createMenu()
     -- create coroutine
     local co = coroutine.create(function() Restack.do_restack(); end);
     -- resume coroutine when item unlocked is fired
+
     local f = CreateFrame("Frame");
     f:RegisterEvent("ITEM_UNLOCKED");
+    f:RegisterEvent("BAG_UPDATE");
     f:SetScript("OnEvent", function(self, event, ...)
       if coroutine.status(co) == "dead" then
         f:UnregisterEvent("ITEM_UNLOCKED");
+        f:UnregisterEvent("BAG_UPDATE");
       end
-      if event == "ITEM_UNLOCKED" then
+      if event == "ITEM_UNLOCKED" or event == "BAG_UPDATE" then
         coroutine.resume(co);
       end
     end);
+
     -- launch
     coroutine.resume(co);
   end);
