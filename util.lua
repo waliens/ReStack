@@ -78,6 +78,10 @@ local function remove_list_value (d, k, v)
   end
 end
 
+local function has_list_value(d, k, v)
+  return d[k] ~= nil and has_value(d[k], v);
+end
+
 local function merge_list_value (d1, d2) 
   local merged = {};
   for k, list in pairs(d1) do
@@ -87,7 +91,7 @@ local function merge_list_value (d1, d2)
   end
   for k, list in pairs(d2) do
     for _, v in ipairs(list) do
-      if merged[k] == nil or table_find(merged[k], v) == -1 then
+      if merged[k] == nil or table_find(merged[k], v) == 0 then
         add_list_value(merged, k, v);
       end
     end 
@@ -140,6 +144,7 @@ ns.Util.add_list_value = add_list_value;
 ns.Util.remove_list_value = remove_list_value;
 ns.Util.count_list_value = count_list_value;
 ns.Util.merge_list_value = merge_list_value;
+ns.Util.has_list_value = has_list_value;
 ns.Util.table_keys = table_keys;
 ns.Util.cache_get = cache_get;
 ns.Util.cache_set = cache_set;
