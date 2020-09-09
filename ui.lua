@@ -37,6 +37,30 @@ local function updateText(rs_frame, count, maxtime, mintime)
   rs_frame.minTimeString:SetText("Min time: " .. mintime);
 end
 
+local function execute_item_moving_fn(fn)
+  local launch_fn = function(self, event)
+    -- create coroutine
+    local co = coroutine.create(fn);
+    -- resume coroutine when item unlocked is fired
+
+    local f = CreateFrame("Frame");
+      f:RegisterEvent("ITEM_UNLOCKED");
+      f:RegisterEvent("BAG_UPDATE");
+      f:SetScript("OnEvent", function(self, event, ...)
+      if coroutine.status(co) == "dead" then
+        f:UnregisterEvent("ITEM_UNLOCKED");
+        f:UnregisterEvent("BAG_UPDATE");
+      end
+      if event == "ITEM_UNLOCKED" or event == "BAG_UPDATE" then
+        coroutine.resume(co);
+      end
+    end);
+
+    -- launch
+    coroutine.resume(co);
+  end
+  return launch_fn;
+end
 
 local function createMenu() 
   local frame = CreateFrame("Frame", "ReStack_MainFrame", UIParent, "BasicFrameTemplateWithInset");
@@ -54,34 +78,18 @@ local function createMenu()
   updateText(frame, 0, 0, 0);
 
   -- buttons
-  frame.countButton = createButton(frame, "ReStack_CountButton", "Count", {90, 20}, {"RIGHT", frame, "BOTTOM"}, {-5, 25});
+  frame.countButton = createButton(frame, "ReStack_CountButton", "Count", {65, 20}, {"RIGHT", frame, "BOTTOM"}, {-45, 25});
+  frame.restackButton = createButton(frame, "ReStack_RestackButton", "Restack", {65, 20}, {"LEFT", frame.countButton, "RIGHT"}, {10, 0});
+  frame.cleanupButton = createButton(frame, "ReStack_CleanupButton", "Clean up", {65; 20}, {"LEFT", frame.restackButton, "RIGHT"}, {10, 0})
+
   frame.countButton:SetScript("OnClick", function(self, event)
     local _, _, _, item_count = Restack.analyze_slots();
     updateText(frame, item_count, 0, 0);
   end);
 
-  frame.restackButton = createButton(frame, "ReStack_RestackButton", "Restack", {90, 20}, {"LEFT", frame.countButton, "RIGHT"}, {10, 0});
-  frame.restackButton:SetScript("OnClick", function(self, event)
-    -- create coroutine
-    local co = coroutine.create(function() Restack.do_restack(); end);
-    -- resume coroutine when item unlocked is fired
-
-    local f = CreateFrame("Frame");
-    f:RegisterEvent("ITEM_UNLOCKED");
-    f:RegisterEvent("BAG_UPDATE");
-    f:SetScript("OnEvent", function(self, event, ...)
-      if coroutine.status(co) == "dead" then
-        f:UnregisterEvent("ITEM_UNLOCKED");
-        f:UnregisterEvent("BAG_UPDATE");
-      end
-      if event == "ITEM_UNLOCKED" or event == "BAG_UPDATE" then
-        coroutine.resume(co);
-      end
-    end);
-
-    -- launch
-    coroutine.resume(co);
-  end);
+  print(tostring(execute_item_moving_fn(Restack.do_restack)));
+  frame.restackButton:SetScript("OnClick", execute_item_moving_fn(Restack.do_restack));
+  frame.cleanupButton:SetScript("OnClick", execute_item_moving_fn(Restack.do_cleanup));
 
   -- make the menu movable 
   frame:SetMovable(true);
