@@ -6,8 +6,8 @@ local Util = ns.Util;
 local Restacker = {};
 
 -- Constants
-GLAND_ID = 4338; -- 12586; -- 
-MAX_GLAND_STACK_SIZE = 20; -- 50; -- 
+GLAND_ID = 12586;
+MAX_GLAND_STACK_SIZE 50;
 
 --------------------------------------
 -- SLOTS                            --
