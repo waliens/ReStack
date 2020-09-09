@@ -1,9 +1,6 @@
 -- Namespace
 local _, ns = ...;
 
-----------
--- Util --
-----------
 local function map(tbl, f)
     local t = {}
     for k,v in pairs(tbl) do
