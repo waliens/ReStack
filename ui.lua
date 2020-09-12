@@ -78,9 +78,9 @@ local function createMenu()
   updateText(frame, 0, 0, 0);
 
   -- buttons
-  frame.countButton = createButton(frame, "ReStack_CountButton", "Count", {65, 20}, {"RIGHT", frame, "BOTTOM"}, {-45, 25});
-  frame.restackButton = createButton(frame, "ReStack_RestackButton", "Restack", {65, 20}, {"LEFT", frame.countButton, "RIGHT"}, {10, 0});
-  frame.minimizeButton = createButton(frame, "ReStack_MinimizeButton", "Minimize", {65; 20}, {"LEFT", frame.restackButton, "RIGHT"}, {10, 0})
+  frame.countButton = createButton(frame, "ReStack_CountButton", "Count", {70, 20}, {"RIGHT", frame, "BOTTOM"}, {-45, 25});
+  frame.restackButton = createButton(frame, "ReStack_RestackButton", "Restack", {70, 20}, {"LEFT", frame.countButton, "RIGHT"}, {10, 0});
+  frame.minimizeButton = createButton(frame, "ReStack_MinimizeButton", "Minimize", {70; 20}, {"LEFT", frame.restackButton, "RIGHT"}, {10, 0})
 
   -- sac tooltip frame
   local durationFrame = CreateFrame("GameTooltip", "DurationReader", nil, "GameTooltipTemplate");
