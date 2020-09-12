@@ -196,7 +196,7 @@ local function check_full_slots(cnt_cache, bag_slots)
   for bag_tag, slots in pairs(bag_slots) do
     local bag = to_bag_id(bag_tag);
     for _, slot in ipairs(slots) do
-      if Util.cache_get(cnt_cache, {bag, tag}) == MAX_GLAND_STACK_SIZE then
+      if Util.cache_get(cnt_cache, {bag, slot}) == MAX_GLAND_STACK_SIZE then
         Util.remove_list_value(bag_slots, bag_tag, slot);
         Util.add_list_value(full, bag_tag, slot);
       end
@@ -268,7 +268,7 @@ local function do_restack(durationFrame)
   -- execute the restacking 
   local sacs, empty, cnt_cache, timer_cache, _ = analyze_slots(durationFrame);
   if Util.count_list_value(sacs) <= 1 then
-    print(addon_msg_prefix() .. ": no sac in your bags, cannot restack.");
+    print(addon_msg_prefix() .. ": less than 2 sacs in your bags, cannot restack.");
     return;
   end
 
@@ -292,7 +292,7 @@ end
 
 local function do_minimize(durationFrame)
   local sacs, empty, cnt_cache, _, _ = analyze_slots(durationFrame);
-  if Util.count_list_value(sacs) <= 1 then
+  if Util.count_list_value(sacs) == 0 then
     print(addon_msg_prefix() .. ": no sac in your bags, cannot minimize.");
     return;
   end
