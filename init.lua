@@ -19,7 +19,7 @@ function ns:init(event, name) -- DEBUG --
 
   -- creates a hidden menu
   local UIConfig = RestackUI.toggleMenu(nil);
-
+  
   SLASH_RESTACK1 = "/restack";
   SlashCmdList.RESTACK = function()
     UIConfig = RestackUI.toggleMenu(UIConfig);
