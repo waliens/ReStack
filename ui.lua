@@ -32,17 +32,17 @@ local function createFontString(frame, name, layer, point_ref, point_offset)
 end
 
 local function updateText(rs_frame, count, maxtime, mintime)
-  rs_frame.countString:SetText("Glands: " .. count);
-  rs_frame.maxTimeString:SetText("Max time: " .. maxtime);
-  rs_frame.minTimeString:SetText("Min time: " .. mintime);
+  rs_frame.countString:SetText("|cffFF0000Glands:|r " .. count);
+  rs_frame.maxTimeString:SetText("|cffFF0000Max time:|r " .. maxtime .. " min.");
+  rs_frame.minTimeString:SetText("|cffFF0000Min time:|r " .. mintime .. " min.");
 end
 
-local function execute_item_moving_fn(fn)
+local function execute_item_moving_fn(fn, arg)
   local launch_fn = function(self, event)
     -- create coroutine
-    local co = coroutine.create(fn);
+    local co = coroutine.create(function() fn(arg); end);
+    
     -- resume coroutine when item unlocked is fired
-
     local f = CreateFrame("Frame");
       f:RegisterEvent("ITEM_UNLOCKED");
       f:RegisterEvent("BAG_UPDATE");
@@ -82,13 +82,28 @@ local function createMenu()
   frame.restackButton = createButton(frame, "ReStack_RestackButton", "Restack", {65, 20}, {"LEFT", frame.countButton, "RIGHT"}, {10, 0});
   frame.minimizeButton = createButton(frame, "ReStack_MinimizeButton", "Minimize", {65; 20}, {"LEFT", frame.restackButton, "RIGHT"}, {10, 0})
 
+  -- sac tooltip frame
+  local durationFrame = CreateFrame("GameTooltip", "DurationReader", nil, "GameTooltipTemplate");
+  durationFrame:SetOwner(WorldFrame,"ANCHOR_NONE" );
+  durationFrame:AddFontStrings(
+      DurationReader:CreateFontString("$parentTextLeft1", nil, "GameTooltipText"),
+      DurationReader:CreateFontString("$parentTextRight1", nil, "GameTooltipText")
+  );
+
   frame.countButton:SetScript("OnClick", function(self, event)
-    local _, _, _, item_count = Restack.analyze_slots();
-    updateText(frame, item_count, 0, 0);
+    local sacs, _, _, timer_cache, item_count = Restack.analyze_slots(durationFrame);
+    if item_count > 0 then
+      local _, _, max_timer = Restack.pick_bag_slot_opt(timer_cache, sacs, false);
+      local _, _, min_timer = Restack.pick_bag_slot_opt(timer_cache, sacs, true);
+      updateText(frame, item_count, max_timer, min_timer);
+    else
+      updateText(frame, "none", "??", "??");
+    end
+
   end);
 
-  frame.restackButton:SetScript("OnClick", execute_item_moving_fn(Restack.do_restack));
-  frame.minimizeButton:SetScript("OnClick", execute_item_moving_fn(Restack.do_minimize));
+  frame.restackButton:SetScript("OnClick", execute_item_moving_fn(Restack.do_restack, durationFrame));
+  frame.minimizeButton:SetScript("OnClick", execute_item_moving_fn(Restack.do_minimize, durationFrame));
 
   -- make the menu movable 
   frame:SetMovable(true);
