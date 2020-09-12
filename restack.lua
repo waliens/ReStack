@@ -30,13 +30,25 @@ local function cache_increment(t, k, v)
   Util.cache_set(t, k, curr + v);
 end
 
-local function analyze_slots ()
+local function get_sac_timer(durationFrame, bag, slot)
+  durationFrame:ClearLines();
+  durationFrame:SetBagItem(bag, slot);
+  local tooltip = DurationReader:GetName();
+  local textFrame = _G[tooltip .. "TextLeft" .. 2];
+  if string.find(textFrame:GetText(), "hrs") == nil then
+    return tonumber(string.match(textFrame:GetText(), "%d+"));
+  else
+    return 60; 
+  end
+end
+
+local function analyze_slots (durationFrame)
   -- read player's containers to track sacs and empty slots
   -- build a count cache (cnt_cache) to keep track of sac stack sizes
   -- not relying on on the unreliable GetContainerItemInfo
   local empty_slots = {};
   local sac_slots = {};
-  local cnt_cache = {};
+  local cnt_cache, timer_cache = {}, {};
   local number_sac = 0;
   for bag_id=0,4 do
     for slot_id=1,GetContainerNumSlots(bag_id) do 
@@ -48,11 +60,12 @@ local function analyze_slots ()
         Util.add_list_value(sac_slots, to_bag_tag(bag_id), slot_id);
         local _, item_count, _, _, _, _, _ = GetContainerItemInfo(bag_id, slot_id);
         Util.cache_set(cnt_cache, {bag_id, slot_id}, item_count);
+        Util.cache_set(timer_cache, {bag_id, slot_id}, get_sac_timer(durationFrame, bag_id, slot_id));
         number_sac = number_sac + item_count;
       end
     end
   end
-  return sac_slots, empty_slots, cnt_cache, number_sac;
+  return sac_slots, empty_slots, cnt_cache, timer_cache, number_sac;
 end
 
 local function move_item(cnt_cache, src_bag, src_slot, quantity, dst_bag, dst_slot)
@@ -89,15 +102,15 @@ local function pick_bag_slot(bag_slots)
   return bag_tag, bag_id, slot_id;
 end
 
-local function pick_bag_slot_opt(cnt_cache, bag_slots, min) 
+local function pick_bag_slot_opt(cache, bag_slots, min) 
   -- extract a bag slot from the bag_slots structure
-  -- if min is true, the slot with the smallest stack size is returned
-  -- if min is false, the slot with the largest stack size is returned
+  -- if min is true, the slot with the smallest value in cache is returned
+  -- if min is false, the slot with the largest value in cache is returned
   local opt_count, opt_slot, opt_bag = (min and 9999 or -1), 0, 0; 
   for bag_tag, slots in pairs(bag_slots) do
     local bag = to_bag_id(bag_tag);
     for _, slot in ipairs(slots) do
-      local count = Util.cache_get(cnt_cache, {bag, slot});
+      local count = Util.cache_get(cache, {bag, slot});
       if count ~= nil and (min and count < opt_count) or (not min and count > opt_count) then
         opt_count = count;
         opt_slot = slot;
@@ -251,15 +264,16 @@ local function minimize(cnt_cache, empty, sacs)
   end
 end 
 
-local function do_restack()
+local function do_restack(durationFrame)
   -- execute the restacking 
-  local sacs, empty, cnt_cache, _ = analyze_slots();
+  local sacs, empty, cnt_cache, timer_cache, _ = analyze_slots(durationFrame);
   if Util.count_list_value(sacs) <= 1 then
     print(addon_msg_prefix() .. ": no sac in your bags, cannot restack.");
     return;
   end
 
-  local seed_bag, seed_slot, _ = pick_bag_slot_opt(cnt_cache, sacs, true);
+  -- get slot with highest timer
+  local seed_bag, seed_slot, _ = pick_bag_slot_opt(timer_cache, sacs, false);
   local maxed = {}; -- sac slots that have max timer
   Util.remove_list_value(sacs, to_bag_tag(seed_bag), seed_slot);
   Util.add_list_value(maxed, to_bag_tag(seed_bag), seed_slot);
@@ -276,8 +290,8 @@ local function do_restack()
   print(addon_msg_prefix() .. ": your sacs have been restacked.");
 end
 
-local function do_minimize()
-  local sacs, empty, cnt_cache, _ = analyze_slots();
+local function do_minimize(durationFrame)
+  local sacs, empty, cnt_cache, _, _ = analyze_slots(durationFrame);
   if Util.count_list_value(sacs) <= 1 then
     print(addon_msg_prefix() .. ": no sac in your bags, cannot minimize.");
     return;
@@ -290,3 +304,5 @@ ns.Restack = {};
 ns.Restack.analyze_slots = analyze_slots;
 ns.Restack.do_restack = do_restack;
 ns.Restack.do_minimize = do_minimize;
+ns.Restack.pick_bag_slot_opt = pick_bag_slot_opt;
+ns.Restack.addon_msg_prefix = addon_msg_prefix;
