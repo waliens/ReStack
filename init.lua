@@ -21,6 +21,7 @@ function ns:init(event, name) -- DEBUG --
   local UIConfig = RestackUI.toggleMenu(nil);
   
   SLASH_RESTACK1 = "/restack";
+  SLASH_RESTACK2 = "/rs";
   SlashCmdList.RESTACK = function()
     UIConfig = RestackUI.toggleMenu(UIConfig);
   end
