@@ -87,7 +87,6 @@ local function createMenu()
     updateText(frame, item_count, 0, 0);
   end);
 
-  print(tostring(execute_item_moving_fn(Restack.do_restack)));
   frame.restackButton:SetScript("OnClick", execute_item_moving_fn(Restack.do_restack));
   frame.cleanupButton:SetScript("OnClick", execute_item_moving_fn(Restack.do_cleanup));
 
