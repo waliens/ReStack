@@ -7,7 +7,7 @@ local Restacker = {};
 
 -- Constants
 GLAND_ID = 12586;
-MAX_GLAND_STACK_SIZE 50;
+MAX_GLAND_STACK_SIZE = 50;
 
 local function to_bag_tag(bag_id) 
   return "bag_" .. bag_id;
