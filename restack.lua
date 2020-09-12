@@ -9,6 +9,10 @@ local Restacker = {};
 GLAND_ID = 12586;
 MAX_GLAND_STACK_SIZE = 50;
 
+local function addon_msg_prefix()
+  return "|cff00FF00ReStack|r"
+end
+
 local function to_bag_tag(bag_id) 
   return "bag_" .. bag_id;
 end
@@ -188,7 +192,7 @@ local function check_full_slots(cnt_cache, bag_slots)
   return full;
 end
 
-local function clean_up(cnt_cache, empty, sacs)
+local function minimize(cnt_cache, empty, sacs)
   -- remerge all stacks so that it fills a minimum number of bag slots
   -- first checks which ones are already full 
   if table.getn(Util.table_keys(sacs)) == 0 then
@@ -250,6 +254,11 @@ end
 local function do_restack()
   -- execute the restacking 
   local sacs, empty, cnt_cache, _ = analyze_slots();
+  if Util.count_list_value(sacs) <= 1 then
+    print(addon_msg_prefix() .. ": no sac in your bags, cannot restack.");
+    return;
+  end
+
   local seed_bag, seed_slot, _ = pick_bag_slot_opt(cnt_cache, sacs, true);
   local maxed = {}; -- sac slots that have max timer
   Util.remove_list_value(sacs, to_bag_tag(seed_bag), seed_slot);
@@ -264,15 +273,20 @@ local function do_restack()
     maxed = Util.merge_list_value(full, maxed);
   end
 
-  print("ReStack has restacked your stack(s).")
+  print(addon_msg_prefix() .. ": your sacs have been restacked.");
 end
 
-local function do_cleanup()
+local function do_minimize()
   local sacs, empty, cnt_cache, _ = analyze_slots();
-  clean_up(cnt_cache, empty, sacs);
+  if Util.count_list_value(sacs) <= 1 then
+    print(addon_msg_prefix() .. ": no sac in your bags, cannot minimize.");
+    return;
+  end
+  
+  minimize(cnt_cache, empty, sacs);
 end
 
 ns.Restack = {};
 ns.Restack.analyze_slots = analyze_slots;
 ns.Restack.do_restack = do_restack;
-ns.Restack.do_cleanup = do_cleanup;
+ns.Restack.do_minimize = do_minimize;

@@ -80,7 +80,7 @@ local function createMenu()
   -- buttons
   frame.countButton = createButton(frame, "ReStack_CountButton", "Count", {65, 20}, {"RIGHT", frame, "BOTTOM"}, {-45, 25});
   frame.restackButton = createButton(frame, "ReStack_RestackButton", "Restack", {65, 20}, {"LEFT", frame.countButton, "RIGHT"}, {10, 0});
-  frame.cleanupButton = createButton(frame, "ReStack_CleanupButton", "Clean up", {65; 20}, {"LEFT", frame.restackButton, "RIGHT"}, {10, 0})
+  frame.minimizeButton = createButton(frame, "ReStack_MinimizeButton", "Minimize", {65; 20}, {"LEFT", frame.restackButton, "RIGHT"}, {10, 0})
 
   frame.countButton:SetScript("OnClick", function(self, event)
     local _, _, _, item_count = Restack.analyze_slots();
@@ -88,7 +88,7 @@ local function createMenu()
   end);
 
   frame.restackButton:SetScript("OnClick", execute_item_moving_fn(Restack.do_restack));
-  frame.cleanupButton:SetScript("OnClick", execute_item_moving_fn(Restack.do_cleanup));
+  frame.minimizeButton:SetScript("OnClick", execute_item_moving_fn(Restack.do_minimize));
 
   -- make the menu movable 
   frame:SetMovable(true);
